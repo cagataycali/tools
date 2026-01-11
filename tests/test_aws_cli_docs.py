@@ -19,7 +19,6 @@ from strands_tools.aws_cli_docs import (
     get_aws_service_commands,
 )
 
-
 # Sample HTML responses for mocking
 SAMPLE_SERVICE_INDEX_HTML = """
 <!DOCTYPE html>
@@ -74,7 +73,7 @@ SAMPLE_COMMAND_DETAILS_HTML = """
         <h2>Options</h2>
         <dl>
             <dt>--dryrun</dt>
-            <dd>Displays the operations that would be performed using the specified command without actually running them.</dd>
+            <dd>Displays the operations that would be performed using the specified command.</dd>
             <dt>--quiet</dt>
             <dd>Does not display the operations performed from the specified command.</dd>
             <dt>--recursive</dt>

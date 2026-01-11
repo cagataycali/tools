@@ -38,7 +38,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import requests
-from markdownify import markdownify as md
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -122,30 +121,45 @@ def _fetch_page(url: str, timeout: int = 30) -> Optional[str]:
         return None
 
 
-def _extract_text_from_html(html: str, selector_pattern: str = None) -> str:
-    """Extract clean text from HTML using regex (no BeautifulSoup dependency).
+def _html_to_text(html: str) -> str:
+    """Convert HTML to plain text using regex (no external dependencies).
 
     Args:
-        html: HTML content
-        selector_pattern: Optional regex pattern to match specific sections
+        html: HTML content to convert
 
     Returns:
-        Cleaned text content
+        Plain text with basic formatting preserved
     """
     # Remove script and style elements
-    html = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
-    html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<nav[^>]*>.*?</nav>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<header[^>]*>.*?</header>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<footer[^>]*>.*?</footer>", "", text, flags=re.DOTALL | re.IGNORECASE)
 
-    # Convert to markdown for better readability
-    try:
-        text = md(html, strip=["script", "style", "nav", "header", "footer"])
-    except Exception:
-        # Fallback: strip all HTML tags
-        text = re.sub(r"<[^>]+>", " ", html)
+    # Convert common elements to text equivalents
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</div>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</li>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<h[1-6][^>]*>", "\n## ", text, flags=re.IGNORECASE)
+    text = re.sub(r"</h[1-6]>", "\n", text, flags=re.IGNORECASE)
+
+    # Strip remaining HTML tags
+    text = re.sub(r"<[^>]+>", "", text)
+
+    # Decode HTML entities
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt;", ">")
+    text = text.replace("&amp;", "&")
+    text = text.replace("&nbsp;", " ")
+    text = text.replace("&quot;", '"')
+    text = text.replace("&#39;", "'")
 
     # Clean up whitespace
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
+    return text.strip()
 
 
 def _parse_service_commands(html: str, service: str) -> List[Dict[str, str]]:
@@ -229,7 +243,7 @@ def _parse_command_details(html: str) -> Dict[str, str]:
 
     # Extract Options section
     options_match = re.search(
-        r'<div[^>]*id="options"[^>]*>(.*?)</div>\s*(?:<div[^>]*id=|$)', html, re.DOTALL | re.IGNORECASE
+        r'<div[^>]*id="options"[^>]*>(.*?)</div>', html, re.DOTALL | re.IGNORECASE
     )
     if options_match:
         options_html = options_match.group(1)
@@ -246,7 +260,7 @@ def _parse_command_details(html: str) -> Dict[str, str]:
 
     # Extract Examples section
     examples_match = re.search(
-        r'<div[^>]*id="examples"[^>]*>(.*?)</div>\s*(?:<div[^>]*id=|$)', html, re.DOTALL | re.IGNORECASE
+        r'<div[^>]*id="examples"[^>]*>(.*?)</div>', html, re.DOTALL | re.IGNORECASE
     )
     if examples_match:
         examples_html = examples_match.group(1)
@@ -260,20 +274,11 @@ def _parse_command_details(html: str) -> Dict[str, str]:
 
     # If we couldn't parse sections, try to get full text
     if not details:
-        # Convert HTML to markdown for better readability
-        try:
-            full_text = md(html, strip=["script", "style", "nav", "header", "footer"])
-            # Truncate if too long
-            if len(full_text) > 5000:
-                full_text = full_text[:5000] + "..."
-            details["full_text"] = full_text
-        except Exception:
-            # Fallback: strip all HTML tags
-            full_text = re.sub(r"<[^>]+>", " ", html)
-            full_text = re.sub(r"\s+", " ", full_text).strip()
-            if len(full_text) > 5000:
-                full_text = full_text[:5000] + "..."
-            details["full_text"] = full_text
+        full_text = _html_to_text(html)
+        # Truncate if too long
+        if len(full_text) > 5000:
+            full_text = full_text[:5000] + "..."
+        details["full_text"] = full_text
 
     return details
 
@@ -345,7 +350,7 @@ def get_aws_service_commands(service: str, use_cache: bool = True) -> str:
         [{"command": "cp", "link": "https://..."}, {"command": "ls", "link": "https://..."}, ...]
 
         >>> get_aws_service_commands(service="lambda")
-        [{"command": "invoke", "link": "https://..."}, {"command": "create-function", "link": "https://..."}, ...]
+        [{"command": "invoke", "link": "https://..."}, {"command": "create-function", ...}]
 
     Use Cases:
         - Discovering what operations are available for a specific AWS service
@@ -391,7 +396,7 @@ def get_aws_service_commands(service: str, use_cache: bool = True) -> str:
     if not commands:
         error_msg = (
             f"No commands found for service '{service}'. "
-            "Please verify the service name is correct (use lowercase, e.g., 's3', 'ec2', 'lambda')."
+            "Please verify the service name is correct (use lowercase, e.g., 's3', 'ec2')."
         )
         console.print(f"[yellow]{error_msg}[/yellow]")
         return json.dumps({"error": error_msg})
@@ -463,7 +468,9 @@ def get_aws_command_details(service: str, command: str, use_cache: bool = True) 
         cached = _cache.get(cache_key)
         if cached:
             console.print(f"[dim]Using cached results for '{service} {command}'[/dim]")
-            console.print(_format_command_details(service, command, cached["link"], cached["details"]))
+            console.print(
+                _format_command_details(service, command, cached["link"], cached["details"])
+            )
             return json.dumps(cached, indent=2)
 
     # Build URL for command documentation
@@ -480,7 +487,8 @@ def get_aws_command_details(service: str, command: str, use_cache: bool = True) 
     if not html:
         error_msg = (
             f"Could not fetch documentation for 'aws {service} {command}'. "
-            f"The command may not exist. Use get_aws_service_commands(service='{service}') to see available commands."
+            f"The command may not exist. "
+            f"Use get_aws_service_commands(service='{service}') to see available commands."
         )
         console.print(f"[red]{error_msg}[/red]")
         return json.dumps({"error": error_msg})
@@ -489,7 +497,10 @@ def get_aws_command_details(service: str, command: str, use_cache: bool = True) 
     details = _parse_command_details(html)
 
     if not details:
-        error_msg = f"Could not parse documentation for 'aws {service} {command}'. The page structure may have changed."
+        error_msg = (
+            f"Could not parse documentation for 'aws {service} {command}'. "
+            "The page structure may have changed."
+        )
         console.print(f"[yellow]{error_msg}[/yellow]")
         return json.dumps({"error": error_msg})
 
