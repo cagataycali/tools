@@ -215,9 +215,7 @@ def _parse_command_details(html: str) -> Dict[str, str]:
     details = {}
 
     # Extract Description section
-    desc_match = re.search(
-        r'<div[^>]*id="description"[^>]*>(.*?)</div>\s*(?:<div|$)', html, re.DOTALL | re.IGNORECASE
-    )
+    desc_match = re.search(r'<div[^>]*id="description"[^>]*>(.*?)</div>\s*(?:<div|$)', html, re.DOTALL | re.IGNORECASE)
     if desc_match:
         desc_html = desc_match.group(1)
         # Get first few paragraphs
@@ -227,9 +225,7 @@ def _parse_command_details(html: str) -> Dict[str, str]:
             details["description"] = desc_text
 
     # Extract Synopsis section
-    synopsis_match = re.search(
-        r'<div[^>]*id="synopsis"[^>]*>(.*?)</div>\s*(?:<div|$)', html, re.DOTALL | re.IGNORECASE
-    )
+    synopsis_match = re.search(r'<div[^>]*id="synopsis"[^>]*>(.*?)</div>\s*(?:<div|$)', html, re.DOTALL | re.IGNORECASE)
     if synopsis_match:
         synopsis_html = synopsis_match.group(1)
         # Look for pre or code blocks
@@ -242,9 +238,7 @@ def _parse_command_details(html: str) -> Dict[str, str]:
                 details["synopsis"] = re.sub(r"<[^>]+>", "", code_match.group(1)).strip()
 
     # Extract Options section
-    options_match = re.search(
-        r'<div[^>]*id="options"[^>]*>(.*?)</div>', html, re.DOTALL | re.IGNORECASE
-    )
+    options_match = re.search(r'<div[^>]*id="options"[^>]*>(.*?)</div>', html, re.DOTALL | re.IGNORECASE)
     if options_match:
         options_html = options_match.group(1)
         # Find dt/dd pairs (definition list format)
@@ -259,9 +253,7 @@ def _parse_command_details(html: str) -> Dict[str, str]:
             details["options"] = "\n".join(options_text[:15])  # Limit to first 15 options
 
     # Extract Examples section
-    examples_match = re.search(
-        r'<div[^>]*id="examples"[^>]*>(.*?)</div>', html, re.DOTALL | re.IGNORECASE
-    )
+    examples_match = re.search(r'<div[^>]*id="examples"[^>]*>(.*?)</div>', html, re.DOTALL | re.IGNORECASE)
     if examples_match:
         examples_html = examples_match.group(1)
         examples = []
@@ -468,9 +460,7 @@ def get_aws_command_details(service: str, command: str, use_cache: bool = True) 
         cached = _cache.get(cache_key)
         if cached:
             console.print(f"[dim]Using cached results for '{service} {command}'[/dim]")
-            console.print(
-                _format_command_details(service, command, cached["link"], cached["details"])
-            )
+            console.print(_format_command_details(service, command, cached["link"], cached["details"]))
             return json.dumps(cached, indent=2)
 
     # Build URL for command documentation
@@ -497,10 +487,7 @@ def get_aws_command_details(service: str, command: str, use_cache: bool = True) 
     details = _parse_command_details(html)
 
     if not details:
-        error_msg = (
-            f"Could not parse documentation for 'aws {service} {command}'. "
-            "The page structure may have changed."
-        )
+        error_msg = f"Could not parse documentation for 'aws {service} {command}'. The page structure may have changed."
         console.print(f"[yellow]{error_msg}[/yellow]")
         return json.dumps({"error": error_msg})
 
